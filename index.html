@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guild - ブラウザゲーム</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- タイトル画面 -->
+        <div id="title-screen" class="screen active">
+            <div class="title-content">
+                <h1 class="game-title">Guild</h1>
+                <p class="game-subtitle">ブラウザゲーム</p>
+                
+                <!-- メニューボタン -->
+                <div class="menu-buttons">
+                    <button class="menu-btn" data-page="adventure">
+                        <span class="icon">🗡️</span>
+                        <span class="label">冒険</span>
+                    </button>
+                    <button class="menu-btn" data-page="guild">
+                        <span class="icon">🏰</span>
+                        <span class="label">ギルド</span>
+                    </button>
+                    <button class="menu-btn" data-page="shop">
+                        <span class="icon">🛒</span>
+                        <span class="label">お店</span>
+                    </button>
+                    <button class="menu-btn" data-page="story">
+                        <span class="icon">📖</span>
+                        <span class="label">物語</span>
+                    </button>
+                    <button class="menu-btn" data-page="special">
+                        <span class="icon">⭐</span>
+                        <span class="label">★</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- コンテンツ領域 -->
+        <div id="content-area" class="content-area">
+            <!-- 冒険ページ -->
+            <div id="page-adventure" class="page-content">
+                <div class="page-header">
+                    <button class="back-btn" onclick="backToTitle()">← 戻る</button>
+                    <h2>冒険</h2>
+                </div>
+                <div class="page-body">
+                    <p>ここは冒険ページです。</p>
+                    <p>冒険に出かけて、経験を積みましょう！</p>
+                </div>
+            </div>
+
+            <!-- ギルドページ -->
+            <div id="page-guild" class="page-content">
+                <div class="page-header">
+                    <button class="back-btn" onclick="backToTitle()">← 戻る</button>
+                    <h2>ギルド</h2>
+                </div>
+                <div class="page-body">
+                    <p>ここはギルドページです。</p>
+                    <p>ギルドメンバーを管理しましょう！</p>
+                </div>
+            </div>
+
+            <!-- お店ページ -->
+            <div id="page-shop" class="page-content">
+                <div class="page-header">
+                    <button class="back-btn" onclick="backToTitle()">← 戻る</button>
+                    <h2>お店</h2>
+                </div>
+                <div class="page-body">
+                    <p>ここはお店ページです。</p>
+                    <p>アイテムを購入しましょう！</p>
+                </div>
+            </div>
+
+            <!-- 物語ページ -->
+            <div id="page-story" class="page-content">
+                <div class="page-header">
+                    <button class="back-btn" onclick="backToTitle()">← 戻る</button>
+                    <h2>物語</h2>
+                </div>
+                <div class="page-body">
+                    <p>ここは物語ページです。</p>
+                    <p>ゲームの背景にある物語を知りましょう！</p>
+                </div>
+            </div>
+
+            <!-- 特別ページ (★) -->
+            <div id="page-special" class="page-content">
+                <div class="page-header">
+                    <button class="back-btn" onclick="backToTitle()">← 戻る</button>
+                    <h2>★ 特別</h2>
+                </div>
+                <div class="page-body">
+                    <p>ここは特別なページです。</p>
+                    <p>秘密の機能が隠されているかも…！</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
