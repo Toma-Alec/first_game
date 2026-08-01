@@ -1,17 +1,16 @@
 // ========================================
-// ギルドデータ管理（IndexedDB）
+// ギルドデータベース（IndexedDB）
 // ========================================
 
 /**
- * IndexedDBを使用したギルドデータ管理
- * キャラクターの永続化と効率的な読み書き
+ * ギルドデータベース管理クラス
+ * IndexedDBを使用してキャラクターデータを永続化
  */
 class GuildDatabase {
     constructor() {
-        this.dbName = 'GuildGameDB';
-        this.storeName = 'characters';
+        this.dbName = 'GuildDB';
+        this.version = 1;
         this.db = null;
-        this.initialized = false;
     }
     
     /**
@@ -19,80 +18,52 @@ class GuildDatabase {
      */
     async init() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 1);
+            const request = indexedDB.open(this.dbName, this.version);
             
             request.onerror = () => {
-                console.error('IndexedDB初期化エラー');
+                console.error('データベースのオープンに失敗');
                 reject(request.error);
             };
             
             request.onsuccess = () => {
                 this.db = request.result;
-                this.initialized = true;
-                console.log('✓ IndexedDB初期化完了');
-                resolve(this.db);
+                console.log('✅ ギルドデータベース初期化完了');
+                resolve();
             };
             
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
                 
-                // キャラクターストアを作成
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
-                    store.createIndex('name', 'name', { unique: false });
-                    store.createIndex('job', 'job', { unique: false });
-                    store.createIndex('race', 'race', { unique: false });
-                    console.log('✓ キャラクターストアを作成');
+                // キャラクターストア
+                if (!db.objectStoreNames.contains('characters')) {
+                    const characterStore = db.createObjectStore('characters', { keyPath: 'id' });
+                    characterStore.createIndex('name', 'name', { unique: false });
+                    characterStore.createIndex('job', 'job', { unique: false });
+                    console.log('キャラクターストア作成完了');
                 }
             };
         });
     }
     
     /**
-     * キャラクターを保存（新規作成または更新）
+     * キャラクターを保存
      */
     async saveCharacter(character) {
-        if (!this.initialized) await this.init();
+        if (!this.db) await this.init();
         
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
+            const transaction = this.db.transaction(['characters'], 'readwrite');
+            const store = transaction.objectStore('characters');
             const request = store.put(character.toJSON());
             
+            request.onerror = () => {
+                console.error('キャラクター保存失敗');
+                reject(request.error);
+            };
+            
             request.onsuccess = () => {
-                console.log(`✓ キャラクター保存: ${character.name}`);
+                console.log(`✅ キャラクター「${character.name}」を保存しました`);
                 resolve(character);
-            };
-            
-            request.onerror = () => {
-                console.error('キャラクター保存エラー');
-                reject(request.error);
-            };
-        });
-    }
-    
-    /**
-     * IDでキャラクターを取得
-     */
-    async getCharacter(characterId) {
-        if (!this.initialized) await this.init();
-        
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.get(characterId);
-            
-            request.onsuccess = () => {
-                const data = request.result;
-                if (data) {
-                    resolve(Character.fromJSON(data));
-                } else {
-                    resolve(null);
-                }
-            };
-            
-            request.onerror = () => {
-                reject(request.error);
             };
         });
     }
@@ -101,67 +72,45 @@ class GuildDatabase {
      * すべてのキャラクターを取得
      */
     async getAllCharacters() {
-        if (!this.initialized) await this.init();
+        if (!this.db) await this.init();
         
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
+            const transaction = this.db.transaction(['characters'], 'readonly');
+            const store = transaction.objectStore('characters');
             const request = store.getAll();
             
-            request.onsuccess = () => {
-                const characters = request.result.map(data => Character.fromJSON(data));
-                console.log(`✓ ${characters.length}体のキャラクターを読み込み`);
-                resolve(characters);
+            request.onerror = () => {
+                console.error('キャラクター取得失敗');
+                reject(request.error);
             };
             
-            request.onerror = () => {
-                reject(request.error);
+            request.onsuccess = () => {
+                const charactersData = request.result;
+                const characters = charactersData.map(data => Character.fromJSON(data));
+                resolve(characters);
             };
         });
     }
     
     /**
-     * 職業でキャラクターを検索
+     * キャラクターを取得（IDで検索）
      */
-    async getCharactersByJob(job) {
-        if (!this.initialized) await this.init();
+    async getCharacterById(id) {
+        if (!this.db) await this.init();
         
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const index = store.index('job');
-            const request = index.getAll(job);
-            
-            request.onsuccess = () => {
-                const characters = request.result.map(data => Character.fromJSON(data));
-                resolve(characters);
-            };
+            const transaction = this.db.transaction(['characters'], 'readonly');
+            const store = transaction.objectStore('characters');
+            const request = store.get(id);
             
             request.onerror = () => {
+                console.error('キャラクター取得失敗');
                 reject(request.error);
             };
-        });
-    }
-    
-    /**
-     * 種族でキャラクターを検索
-     */
-    async getCharactersByRace(race) {
-        if (!this.initialized) await this.init();
-        
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const index = store.index('race');
-            const request = index.getAll(race);
             
             request.onsuccess = () => {
-                const characters = request.result.map(data => Character.fromJSON(data));
-                resolve(characters);
-            };
-            
-            request.onerror = () => {
-                reject(request.error);
+                const data = request.result;
+                resolve(data ? Character.fromJSON(data) : null);
             };
         });
     }
@@ -169,21 +118,22 @@ class GuildDatabase {
     /**
      * キャラクターを削除
      */
-    async deleteCharacter(characterId) {
-        if (!this.initialized) await this.init();
+    async deleteCharacter(id) {
+        if (!this.db) await this.init();
         
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.delete(characterId);
-            
-            request.onsuccess = () => {
-                console.log(`✓ キャラクター削除: ${characterId}`);
-                resolve();
-            };
+            const transaction = this.db.transaction(['characters'], 'readwrite');
+            const store = transaction.objectStore('characters');
+            const request = store.delete(id);
             
             request.onerror = () => {
+                console.error('キャラクター削除失敗');
                 reject(request.error);
+            };
+            
+            request.onsuccess = () => {
+                console.log(`✅ キャラクター（ID: ${id}）を削除しました`);
+                resolve();
             };
         });
     }
@@ -192,20 +142,21 @@ class GuildDatabase {
      * すべてのキャラクターを削除
      */
     async deleteAllCharacters() {
-        if (!this.initialized) await this.init();
+        if (!this.db) await this.init();
         
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
+            const transaction = this.db.transaction(['characters'], 'readwrite');
+            const store = transaction.objectStore('characters');
             const request = store.clear();
             
-            request.onsuccess = () => {
-                console.log('✓ すべてのキャラクターを削除');
-                resolve();
+            request.onerror = () => {
+                console.error('全キャラクター削除失敗');
+                reject(request.error);
             };
             
-            request.onerror = () => {
-                reject(request.error);
+            request.onsuccess = () => {
+                console.log('✅ すべてのキャラクターを削除しました');
+                resolve();
             };
         });
     }
@@ -214,19 +165,20 @@ class GuildDatabase {
      * キャラクター数を取得
      */
     async getCharacterCount() {
-        if (!this.initialized) await this.init();
+        if (!this.db) await this.init();
         
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
+            const transaction = this.db.transaction(['characters'], 'readonly');
+            const store = transaction.objectStore('characters');
             const request = store.count();
+            
+            request.onerror = () => {
+                console.error('キャラクター数取得失敗');
+                reject(request.error);
+            };
             
             request.onsuccess = () => {
                 resolve(request.result);
-            };
-            
-            request.onerror = () => {
-                reject(request.error);
             };
         });
     }
