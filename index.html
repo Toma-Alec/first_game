@@ -60,9 +60,30 @@
                     <button class="back-btn" onclick="backToTitle()">← 戻る</button>
                     <h2>ギルド</h2>
                 </div>
-                <div class="page-body">
-                    <p>ここはギルドページです。</p>
-                    <p>ギルドメンバーを管理しましょう！</p>
+                <div class="guild-main-menu">
+                    <button class="guild-menu-btn" onclick="guildUI.switchGuildView('composition')">
+                        <span class="icon">🎯</span>
+                        <span class="label">編成</span>
+                    </button>
+                    <button class="guild-menu-btn" onclick="guildUI.switchGuildView('recruit')">
+                        <span class="icon">➕</span>
+                        <span class="label">雇用</span>
+                    </button>
+                    <button class="guild-menu-btn" onclick="guildUI.switchGuildView('job_change')">
+                        <span class="icon">🔄</span>
+                        <span class="label">転職</span>
+                    </button>
+                    <button class="guild-menu-btn" onclick="guildUI.switchGuildView('equipment')">
+                        <span class="icon">⚔️</span>
+                        <span class="label">装備</span>
+                    </button>
+                    <button class="guild-menu-btn" onclick="guildUI.switchGuildView('dismiss')">
+                        <span class="icon">❌</span>
+                        <span class="label">解雇</span>
+                    </button>
+                </div>
+                <div class="page-body" id="guild-content">
+                    <!-- ギルド画面のコンテンツ -->
                 </div>
             </div>
 
@@ -90,19 +111,54 @@
                 </div>
             </div>
 
-            <!-- 特別ページ (★) -->
+            <!-- 特別ページ (★) - マスターデータ編集 -->
             <div id="page-special" class="page-content">
                 <div class="page-header">
                     <button class="back-btn" onclick="backToTitle()">← 戻る</button>
-                    <h2>★ 特別</h2>
+                    <h2>★ マスターデータ管理</h2>
                 </div>
-                <div class="page-body">
-                    <p>ここは特別なページです。</p>
-                    <p>秘密の機能が隠されているかも…！</p>
+                <div class="master-data-menu">
+                    <button class="master-menu-btn" onclick="masterDataManager.switchView('races')">
+                        <span class="icon">👥</span>
+                        <span class="label">種族</span>
+                    </button>
+                    <button class="master-menu-btn" onclick="masterDataManager.switchView('jobs')">
+                        <span class="icon">💼</span>
+                        <span class="label">職業</span>
+                    </button>
+                    <button class="master-menu-btn" onclick="masterDataManager.switchView('personalities')">
+                        <span class="icon">💫</span>
+                        <span class="label">個性</span>
+                    </button>
+                    <button class="master-menu-btn" onclick="masterDataManager.switchView('tactics')">
+                        <span class="icon">🎲</span>
+                        <span class="label">戦術</span>
+                    </button>
+                    <button class="master-menu-btn" onclick="masterDataManager.switchView('skills')">
+                        <span class="icon">✨</span>
+                        <span class="label">スキル</span>
+                    </button>
+                    <button class="master-menu-btn" onclick="masterDataManager.switchView('equipment')">
+                        <span class="icon">🛡️</span>
+                        <span class="label">装備</span>
+                    </button>
+                </div>
+                <div class="page-body" id="master-data-content">
+                    <!-- マスターデータ編集画面 -->
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Guild System Scripts -->
+    <script src="js/guild/guild-constants.js"></script>
+    <script src="js/guild/growth-curves.js"></script>
+    <script src="js/guild/skill-system.js"></script>
+    <script src="js/guild/equipment-system.js"></script>
+    <script src="js/guild/character-model.js"></script>
+    <script src="js/guild/guild-data.js"></script>
+    <script src="js/guild/guild-ui.js"></script>
+    <script src="js/guild/master-data-manager.js"></script>
 
     <script src="js/main.js"></script>
 </body>
