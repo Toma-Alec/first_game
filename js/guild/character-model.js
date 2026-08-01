@@ -1,20 +1,25 @@
 // ========================================
-// キャラクターモデル
+// キャラクターモデル（新しい計算ロジック）
 // ========================================
 
 /**
  * キャラクタークラス
- * キャラクターの定義と計算ロジックを管理
+ * 新しい戦力計算ロジック：
+ * 1. 基礎値計算（種族→レベル→個性→職業→装備）
+ * 2. 戦力値計算（基礎値から各戦力値を算出）
+ * 3. 装備の戦力補正を加算
+ * 4. スキル効果を適用
  */
 class Character {
     constructor(data = {}) {
-        // ========== 属性 ==========
+        // ========== 基本情報 ==========
         this.id = data.id || this.generateId();
         this.name = data.name || '名前未設定';
         this.gender = data.gender || 'male';
         this.race = data.race || 'human';
         this.personality = data.personality || 'balanced';
         this.job = data.job || 'warrior';
+        this.level = data.level || 1;
         
         // ========== 基礎値（1-20） ==========
         this.baseStats = {
@@ -26,23 +31,30 @@ class Character {
             luck: data.baseStats?.luck || 10
         };
         
-        // ========== 戦力値（計算値） ==========
-        this.battleStats = this.calculateBattleStats();
+        // ========== 装備・戦術・位置情報 ==========
+        this.equipmentManager = new EquipmentManager(data.maxEquipment || 6);
+        if (data.equipment) {
+            for (const equipId of data.equipment) {
+                this.equipmentManager.addEquipment(equipId);
+            }
+        }
         
-        // ========== その他 ==========
-        this.equipment = data.equipment || [];
-        this.tactics = {
-            physicalRate: data.tactics?.physicalRate || 0.4,
-            magicRate: data.tactics?.magicRate || 0.3,
-            breathRate: data.tactics?.breathRate || 0.3,
-            attackRate: data.tactics?.attackRate || 0.6,
-            defenseRate: data.tactics?.defenseRate || 0.3,
-            supportRate: data.tactics?.supportRate || 0.1
-        };
+        this.tacticId = data.tacticId || 'balanced';
         this.position = data.position || 'front';
         
+        // ========== スキルシステム ==========
+        this.skillManager = new SkillManager();
+        if (data.skills) {
+            for (const skillId of data.skills) {
+                this.skillManager.addSkill(skillId);
+            }
+        }
+        
+        // ========== 計算済み値 ==========
+        this.calculatedBaseStats = this.calculateFinalBaseStats();
+        this.battleStats = this.calculateBattleStats();
+        
         // ========== メタ情報 ==========
-        this.level = data.level || 1;
         this.experience = data.experience || 0;
         this.createdAt = data.createdAt || new Date().toISOString();
         this.updatedAt = data.updatedAt || new Date().toISOString();
@@ -56,64 +68,124 @@ class Character {
     }
     
     /**
-     * 基礎値から戦力値を計算
-     * 種族・個性・職業・装備による補正を適用
+     * ========== ステップ1: 基礎値計算 ==========
+     * 種族 → レベル → 個性 → 職業 → 装備
      */
-    calculateBattleStats() {
-        // ステップ1：基礎値に種族補正を適用
-        const raceModifier = RACE_STAT_MODIFIERS[this.race] || RACE_STAT_MODIFIERS.human;
-        const raceAdjustedStats = {};
+    calculateFinalBaseStats() {
+        let stats = { ...this.baseStats };
         
-        for (const [key, value] of Object.entries(this.baseStats)) {
-            raceAdjustedStats[key] = Math.round(value * (raceModifier[key] || 1.0));
+        // ステップ1: 種族の加減算
+        const raceModifiers = RACE_BASE_STAT_MODIFIERS[this.race] || RACE_BASE_STAT_MODIFIERS.human;
+        for (const [key, value] of Object.entries(raceModifiers)) {
+            stats[key] = Math.max(1, Math.min(20, stats[key] + value));
         }
         
-        // ステップ2：個性による補正を適用
-        const personalityModifier = PERSONALITY_STAT_MODIFIERS[this.personality] || {};
-        const personalityAdjustedStats = { ...raceAdjustedStats };
-        
-        for (const [key, modifier] of Object.entries(personalityModifier)) {
-            if (personalityAdjustedStats[key]) {
-                personalityAdjustedStats[key] = Math.round(personalityAdjustedStats[key] * modifier);
+        // ステップ2: レベルによる成長（種族ごとの成長曲線）
+        const growthCurve = RACE_GROWTH_CURVES[this.race];
+        if (growthCurve) {
+            const levelBonus = this.level - 1; // レベル1は成長なし
+            for (const [key, growthRate] of Object.entries(growthCurve.growthPerLevel)) {
+                const growth = Math.floor(growthRate * levelBonus);
+                stats[key] = Math.max(1, Math.min(20, stats[key] + growth));
             }
         }
         
-        // ステップ3：職業の基本ボーナスを追加
-        const job = GUILD_CONSTANTS.JOBS.find(j => j.id === this.job);
-        const jobBonus = job?.baseStats || {};
-        
-        const finalStats = { ...personalityAdjustedStats };
-        for (const [key, value] of Object.entries(jobBonus)) {
-            finalStats[key] = (finalStats[key] || 0) + Math.round(value * 0.5); // 職業ボーナスは50%適用
+        // ステップ3: 個性の加減算
+        const personalityModifiers = PERSONALITY_BASE_STAT_MODIFIERS[this.personality] || {};
+        for (const [key, value] of Object.entries(personalityModifiers)) {
+            stats[key] = Math.max(1, Math.min(20, stats[key] + value));
         }
         
-        // ステップ4：装備による補正（簡易版：装備数に応じた補正）
-        const equipmentBonus = this.equipment.length * 2; // 装備1つごとに2%ボーナス
-        const equipmentModifier = 1 + (equipmentBonus / 100);
+        // ステップ4: 職業の加減算
+        const jobModifiers = JOB_BASE_STAT_MODIFIERS[this.job] || {};
+        for (const [key, value] of Object.entries(jobModifiers)) {
+            stats[key] = Math.max(1, Math.min(20, stats[key] + value));
+        }
         
-        // ステップ5：戦力値を計算
+        // ステップ5: 装備の基礎値補正を加算
+        const equipmentMods = this.equipmentManager.getTotalBaseStatMods();
+        for (const [key, value] of Object.entries(equipmentMods)) {
+            stats[key] = Math.max(1, Math.min(20, stats[key] + value));
+        }
+        
+        return stats;
+    }
+    
+    /**
+     * ========== ステップ2: 戦力値計算 ==========
+     * 計算済み基礎値から各戦力値を算出
+     */
+    calculateBattleStats() {
+        const stats = this.calculatedBaseStats;
+        
+        // 基礎値から戦力値を計算
         const battleStats = {
-            hp: Math.round((finalStats.vitality * 5 + 50) * equipmentModifier),
-            attack: Math.round((finalStats.strength * 3 + 20) * equipmentModifier),
-            hitRate: Math.round(Math.min(99, (finalStats.endurance * 3 + 30))),
-            criticalRate: Math.round(Math.min(40, (finalStats.luck * 2 + 10))),
-            pierceRate: Math.round(Math.min(50, (finalStats.strength * 1.5 + 5))),
-            defense: Math.round((finalStats.vitality * 2 + 15) * equipmentModifier),
-            avoidRate: Math.round(Math.min(99, (finalStats.endurance * 2 + 20))),
-            magicAttack: Math.round((finalStats.spirit * 3 + 20) * equipmentModifier),
-            magicDefense: Math.round((finalStats.wisdom * 2 + 15) * equipmentModifier),
-            magicAvoid: Math.round(Math.min(99, (finalStats.wisdom + 10))),
-            magicRecovery: Math.round(finalStats.spirit * 2 + 10),
-            breathPower: Math.round((finalStats.spirit * 2.5 + 15) * equipmentModifier),
-            breathDefense: Math.round((finalStats.wisdom * 1.5 + 10) * equipmentModifier),
-            breathAvoid: Math.round(Math.min(99, (finalStats.wisdom + finalStats.endurance) / 2 + 5))
+            hp: Math.round(stats.vitality * 8 + 30),
+            attack: Math.round(stats.strength * 4 + 15),
+            hitRate: Math.round(Math.min(99, stats.endurance * 3 + 25)),
+            criticalRate: Math.round(Math.min(40, stats.luck * 2.5 + 5)),
+            pierceRate: Math.round(Math.min(50, stats.strength * 2 + 5)),
+            defense: Math.round(stats.vitality * 3 + 10),
+            avoidRate: Math.round(Math.min(99, stats.endurance * 2.5 + 15)),
+            magicAttack: Math.round(stats.spirit * 4 + 15),
+            magicDefense: Math.round(stats.wisdom * 3 + 10),
+            magicAvoid: Math.round(Math.min(99, stats.wisdom * 2 + 20)),
+            magicRecovery: Math.round(stats.spirit * 3 + 8),
+            breathPower: Math.round(stats.spirit * 3.5 + 12),
+            breathDefense: Math.round(stats.wisdom * 2 + 8),
+            breathAvoid: Math.round(Math.min(99, (stats.wisdom + stats.endurance) / 2 * 2 + 10))
         };
+        
+        // ========== ステップ3: 装備の戦力補正を加算 ==========
+        const equipmentBattleStatMods = this.equipmentManager.getTotalBattleStatMods();
+        for (const [key, value] of Object.entries(equipmentBattleStatMods)) {
+            if (battleStats[key] !== undefined) {
+                battleStats[key] += value;
+            }
+        }
+        
+        // ========== ステップ4: スキル効果を適用 ==========
+        const skills = this.skillManager.getAllSkills();
+        for (const skill of skills) {
+            const modifiedStats = this.applySkillEffect(skill, battleStats);
+            Object.assign(battleStats, modifiedStats);
+        }
         
         return battleStats;
     }
     
     /**
-     * キャラクターデータを更新
+     * スキル効果を戦力値に適用
+     */
+    applySkillEffect(skill, battleStats) {
+        const effect = skill.effect;
+        const modified = { ...battleStats };
+        
+        switch (skill.id) {
+            case 'doubleAttack':
+                // 二重攻撃：攻撃力が120%になる
+                modified.attack = Math.round(modified.attack * 1.2);
+                break;
+            case 'defensiveField':
+                // 防御結界：防御力が110%になる
+                modified.defense = Math.round(modified.defense * 1.1);
+                break;
+            case 'magicAmplify':
+                // 魔力強化：魔法攻撃が120%になる
+                modified.magicAttack = Math.round(modified.magicAttack * 1.2);
+                break;
+            case 'breathAmplify':
+                // ブレス強化：ブレス威力が125%になる
+                modified.breathPower = Math.round(modified.breathPower * 1.25);
+                break;
+            // counter, zombie, acceleration はバトル中に処理されるため、ここでは適用しない
+        }
+        
+        return modified;
+    }
+    
+    /**
+     * キャラクターを更新
      */
     update(data) {
         if (data.name !== undefined) this.name = data.name;
@@ -121,26 +193,61 @@ class Character {
         if (data.race !== undefined) this.race = data.race;
         if (data.personality !== undefined) this.personality = data.personality;
         if (data.job !== undefined) this.job = data.job;
+        if (data.level !== undefined) this.level = data.level;
         
         if (data.baseStats) {
             this.baseStats = { ...this.baseStats, ...data.baseStats };
         }
         
-        if (data.equipment !== undefined) this.equipment = data.equipment;
-        
-        if (data.tactics) {
-            this.tactics = { ...this.tactics, ...data.tactics };
-        }
-        
+        if (data.tacticId !== undefined) this.tacticId = data.tacticId;
         if (data.position !== undefined) this.position = data.position;
         
         // 戦力値を再計算
+        this.calculatedBaseStats = this.calculateFinalBaseStats();
         this.battleStats = this.calculateBattleStats();
         this.updatedAt = new Date().toISOString();
     }
     
     /**
-     * キャラクターをJSONに変換
+     * 装備を追加
+     */
+    addEquipment(equipmentId) {
+        const result = this.equipmentManager.addEquipment(equipmentId);
+        if (result) {
+            // 装備が変わったので戦力値を再計算
+            this.calculatedBaseStats = this.calculateFinalBaseStats();
+            this.battleStats = this.calculateBattleStats();
+        }
+        return result;
+    }
+    
+    /**
+     * 装備を削除
+     */
+    removeEquipment(index) {
+        const result = this.equipmentManager.removeEquipment(index);
+        if (result) {
+            // 装備が変わったので戦力値を再計算
+            this.calculatedBaseStats = this.calculateFinalBaseStats();
+            this.battleStats = this.calculateBattleStats();
+        }
+        return result;
+    }
+    
+    /**
+     * スキルを追加
+     */
+    addSkill(skillId) {
+        const skill = this.skillManager.addSkill(skillId);
+        if (skill) {
+            // スキルが追加されたので戦力値を再計算
+            this.battleStats = this.calculateBattleStats();
+        }
+        return skill;
+    }
+    
+    /**
+     * キャラクターをJSONに変換（保存用）
      */
     toJSON() {
         return {
@@ -150,12 +257,15 @@ class Character {
             race: this.race,
             personality: this.personality,
             job: this.job,
-            baseStats: this.baseStats,
-            battleStats: this.battleStats,
-            equipment: this.equipment,
-            tactics: this.tactics,
-            position: this.position,
             level: this.level,
+            baseStats: this.baseStats,
+            calculatedBaseStats: this.calculatedBaseStats,
+            battleStats: this.battleStats,
+            equipment: this.equipmentManager.equipment.map(e => e.id),
+            maxEquipment: this.equipmentManager.maxEquipment,
+            skills: this.skillManager.skills.map(s => s.id),
+            tacticId: this.tacticId,
+            position: this.position,
             experience: this.experience,
             createdAt: this.createdAt,
             updatedAt: this.updatedAt
@@ -177,10 +287,45 @@ class Character {
             name: this.name,
             race: this.race,
             job: this.job,
+            level: this.level,
             position: this.position,
             hp: this.battleStats.hp,
             attack: this.battleStats.attack,
-            defense: this.battleStats.defense
+            defense: this.battleStats.defense,
+            equipment: this.equipmentManager.getEquipmentCount(),
+            skills: this.skillManager.skills.length
+        };
+    }
+    
+    /**
+     * キャラクターの詳細情報を取得（UI表示用）
+     */
+    getDetailInfo() {
+        const tactics = GUILD_CONSTANTS.TACTICS.find(t => t.id === this.tacticId);
+        
+        return {
+            // 基本情報
+            name: this.name,
+            gender: this.gender,
+            race: this.race,
+            personality: this.personality,
+            job: this.job,
+            level: this.level,
+            position: this.position,
+            
+            // 基礎値
+            baseStats: this.baseStats,
+            calculatedBaseStats: this.calculatedBaseStats,
+            
+            // 戦力値
+            battleStats: this.battleStats,
+            
+            // 装備・スキル・戦術
+            equipment: this.equipmentManager.getAllEquipment(),
+            equipmentCount: this.equipmentManager.getEquipmentCount(),
+            maxEquipment: this.equipmentManager.maxEquipment,
+            skills: this.skillManager.getAllSkills(),
+            tactics: tactics || {}
         };
     }
 }
